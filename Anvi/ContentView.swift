@@ -1,24 +1,14 @@
-//
-//  ContentView.swift
-//  Anvi
-//
-//  Created by Arthaz's MacBook on 11/09/26.
-//
-
 import SwiftUI
 
 struct ContentView: View {
+    @StateObject private var store = CanvasStore()
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
+        AnviCanvasView(store: store)
+            .preferredColorScheme(.light)
     }
 }
 
-#Preview {
-    ContentView()
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View { ContentView() }
 }
