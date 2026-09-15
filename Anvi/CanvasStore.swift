@@ -9,17 +9,17 @@ struct CanvasPoint: Codable, Equatable {
     var cgPoint: CGPoint { CGPoint(x: x, y: y) }
 }
 
-enum IslandKind: String, Codable, CaseIterable, Identifiable {
-    case word
+enum FloatingCardKind: String, Codable, CaseIterable, Identifiable {
+    case thatsWord = "word"
     case thoughts
     case breathing
 
     var id: String { rawValue }
 }
 
-struct IslandPlacement: Identifiable, Codable, Equatable {
-    var id: IslandKind { kind }
-    let kind: IslandKind
+struct FloatingCardPlacement: Identifiable, Codable, Equatable {
+    var id: FloatingCardKind { kind }
+    let kind: FloatingCardKind
     var position: CanvasPoint
 }
 
@@ -31,25 +31,27 @@ struct Thought: Identifiable, Codable, Equatable {
 
 @MainActor
 final class CanvasStore: ObservableObject {
-    @Published private(set) var islands: [IslandPlacement]
+    @Published private(set) var cards: [FloatingCardPlacement]
     @Published private(set) var thoughts: [Thought]
 
     private let defaults: UserDefaults
-    private let islandsKey = "anvi.canvas.islands"
+    private let cardsKey = "anvi.canvas.cards"
+    private let legacyCardsKey = "anvi.canvas.islands"
     private let thoughtsKey = "anvi.thoughts"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        islands = Self.decode([IslandPlacement].self, from: defaults.data(forKey: islandsKey))
-            ?? Self.defaultIslands
+        cards = Self.decode([FloatingCardPlacement].self, from: defaults.data(forKey: cardsKey))
+            ?? Self.decode([FloatingCardPlacement].self, from: defaults.data(forKey: legacyCardsKey))
+            ?? Self.defaultCards
         thoughts = Self.decode([Thought].self, from: defaults.data(forKey: thoughtsKey)) ?? []
     }
 
-    func move(_ kind: IslandKind, by delta: CGSize) {
-        guard let index = islands.firstIndex(where: { $0.kind == kind }) else { return }
-        islands[index].position.x += delta.width
-        islands[index].position.y += delta.height
-        persist(islands, key: islandsKey)
+    func move(_ kind: FloatingCardKind, by delta: CGSize) {
+        guard let index = cards.firstIndex(where: { $0.kind == kind }) else { return }
+        cards[index].position.x += delta.width
+        cards[index].position.y += delta.height
+        persist(cards, key: cardsKey)
     }
 
     func addThought(_ text: String) {
@@ -69,9 +71,9 @@ final class CanvasStore: ObservableObject {
         return try? JSONDecoder().decode(type, from: data)
     }
 
-    private static let defaultIslands = [
-        IslandPlacement(kind: .word, position: CanvasPoint(x: -118, y: -176)),
-        IslandPlacement(kind: .thoughts, position: CanvasPoint(x: 115, y: 106)),
-        IslandPlacement(kind: .breathing, position: CanvasPoint(x: -135, y: 226))
+    private static let defaultCards = [
+        FloatingCardPlacement(kind: .thatsWord, position: CanvasPoint(x: -118, y: -176)),
+        FloatingCardPlacement(kind: .thoughts, position: CanvasPoint(x: 115, y: 106)),
+        FloatingCardPlacement(kind: .breathing, position: CanvasPoint(x: -135, y: 226))
     ]
 }

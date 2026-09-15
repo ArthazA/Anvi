@@ -3,17 +3,16 @@ import UIKit
 
 struct AnviCanvasView: View {
     @ObservedObject var store: CanvasStore
+    @ObservedObject var preferences: AnviPreferences
 
     @State private var cameraOffset: CGSize = .zero
     @State private var settledCameraOffset: CGSize = .zero
-    @State private var zoom: CGFloat = 0.88
-    @State private var settledZoom: CGFloat = 0.88
-    @State private var selectedIsland: IslandKind?
+    @State private var zoom: CGFloat = AnviCustomization.Developer.defaultZoom
+    @State private var settledZoom: CGFloat = AnviCustomization.Developer.defaultZoom
+    @State private var selectedCard: FloatingCardKind?
     @State private var isComposingThought = false
-    @State private var feedbackPulse = 0
-
-    private let minimumZoom: CGFloat = 0.48
-    private let maximumZoom: CGFloat = 1.7
+    @State private var isShowingThatsWord = false
+    @State private var isShowingSettings = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -21,24 +20,28 @@ struct AnviCanvasView: View {
                 AnviTheme.canvas
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
-                    .gesture(panGesture)
+                    .gesture(canvasGesture)
                 DotField(offset: cameraOffset, zoom: zoom).ignoresSafeArea()
                 canvasContent(in: proxy.size)
                 chrome
             }
-            .simultaneousGesture(zoomGesture)
-            .sensoryFeedback(.selection, trigger: feedbackPulse)
-            .sheet(item: $selectedIsland) { kind in
-                islandDetail(kind)
+            .sheet(item: $selectedCard) { kind in
+                cardDetail(kind)
                     .presentationDetents([.medium])
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(34)
             }
             .sheet(isPresented: $isComposingThought) {
-                ThoughtComposer { store.addThought($0) }
+                ThoughtComposer(hapticsEnabled: preferences.hapticsEnabled) { store.addThought($0) }
                     .presentationDetents([.height(300)])
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(34)
+            }
+            .sheet(isPresented: $isShowingSettings) {
+                SettingsView(preferences: preferences)
+            }
+            .fullScreenCover(isPresented: $isShowingThatsWord) {
+                ThatsWordIslandView(preferences: preferences)
             }
         }
     }
@@ -49,18 +52,26 @@ struct AnviCanvasView: View {
                 .position(screenPosition(for: .zero, in: size))
                 .scaleEffect(zoom)
 
-            ForEach(store.islands) { island in
-                MovableIsland(scale: zoom) { delta in
-                    store.move(island.kind, by: delta)
-                    feedbackPulse += 1
+            ForEach(store.cards) { card in
+                MovableFloatingCard(
+                    scale: zoom,
+                    hapticsEnabled: preferences.hapticsEnabled,
+                    bounciness: preferences.bounciness
+                ) { delta in
+                    store.move(card.kind, by: delta)
+                    AnviHaptics.selection(enabled: preferences.hapticsEnabled)
                 } content: {
-                    islandView(for: island.kind)
+                    cardView(for: card.kind)
                         .onTapGesture {
-                            feedbackPulse += 1
-                            selectedIsland = island.kind
+                            AnviHaptics.selection(enabled: preferences.hapticsEnabled)
+                            if card.kind == .thatsWord {
+                                isShowingThatsWord = true
+                            } else {
+                                selectedCard = card.kind
+                            }
                         }
                 }
-                .position(screenPosition(for: island.position.cgPoint, in: size))
+                .position(screenPosition(for: card.position.cgPoint, in: size))
             }
         }
     }
@@ -77,14 +88,28 @@ struct AnviCanvasView: View {
                         .foregroundStyle(AnviTheme.ink)
                 }
                 Spacer()
-                Button(action: resetView) {
-                    Image(systemName: "scope")
-                        .font(.system(size: 17, weight: .semibold))
-                        .frame(width: 46, height: 46)
-                        .foregroundStyle(AnviTheme.moss)
-                        .background(.ultraThinMaterial, in: Circle())
+                HStack(spacing: 10) {
+                    Button {
+                        AnviHaptics.selection(enabled: preferences.hapticsEnabled)
+                        isShowingSettings = true
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(width: 46, height: 46)
+                            .foregroundStyle(AnviTheme.moss)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
+                    .accessibilityLabel("Settings")
+
+                    Button(action: resetView) {
+                        Image(systemName: "scope")
+                            .font(.system(size: 17, weight: .semibold))
+                            .frame(width: 46, height: 46)
+                            .foregroundStyle(AnviTheme.moss)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
+                    .accessibilityLabel("Center canvas")
                 }
-                .accessibilityLabel("Center canvas")
             }
             .padding(.horizontal, 22)
             .padding(.top, 12)
@@ -92,12 +117,14 @@ struct AnviCanvasView: View {
             Spacer()
 
             HStack(spacing: 10) {
-                Label(zoomLabel, systemImage: "hand.draw.fill")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(AnviTheme.mutedInk)
+                if preferences.gestureHintsEnabled {
+                    Label(zoomLabel, systemImage: "hand.draw.fill")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AnviTheme.mutedInk)
+                }
                 Spacer()
                 Button {
-                    feedbackPulse += 1
+                    AnviHaptics.selection(enabled: preferences.hapticsEnabled)
                     isComposingThought = true
                 } label: {
                     Label("Keep a thought", systemImage: "plus")
@@ -121,22 +148,22 @@ struct AnviCanvasView: View {
     }
 
     @ViewBuilder
-    private func islandView(for kind: IslandKind) -> some View {
+    private func cardView(for kind: FloatingCardKind) -> some View {
         switch kind {
-        case .word: WordIsland()
-        case .thoughts: ThoughtsIsland(thoughts: store.thoughts)
-        case .breathing: BreathingIsland()
+        case .thatsWord: ThatsWordFloatingCard()
+        case .thoughts: ThoughtsFloatingCard(thoughts: store.thoughts)
+        case .breathing: BreathingFloatingCard()
         }
     }
 
     @ViewBuilder
-    private func islandDetail(_ kind: IslandKind) -> some View {
+    private func cardDetail(_ kind: FloatingCardKind) -> some View {
         switch kind {
-        case .word:
-            WordDetail()
+        case .thatsWord:
+            EmptyView()
         case .thoughts:
             ThoughtsDetail(thoughts: store.thoughts) {
-                selectedIsland = nil
+                selectedCard = nil
                 Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(350))
                     isComposingThought = true
@@ -155,44 +182,62 @@ struct AnviCanvasView: View {
     }
 
     private var panGesture: some Gesture {
-        DragGesture(minimumDistance: 8)
+        DragGesture(minimumDistance: AnviCustomization.Developer.canvasDragMinimumDistance)
             .onChanged { value in
+                let sensitivity = CGFloat(preferences.panSensitivity)
                 cameraOffset = CGSize(
-                    width: settledCameraOffset.width + value.translation.width,
-                    height: settledCameraOffset.height + value.translation.height
+                    width: settledCameraOffset.width + value.translation.width * sensitivity,
+                    height: settledCameraOffset.height + value.translation.height * sensitivity
                 )
             }
             .onEnded { value in
-                withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+                let sensitivity = CGFloat(preferences.panSensitivity)
+                let inertia = AnviCustomization.Developer.canvasInertia
+                withAnimation(canvasSpring) {
                     cameraOffset = CGSize(
-                        width: settledCameraOffset.width + value.predictedEndTranslation.width * 0.25 + value.translation.width * 0.75,
-                        height: settledCameraOffset.height + value.predictedEndTranslation.height * 0.25 + value.translation.height * 0.75
+                        width: settledCameraOffset.width + (value.predictedEndTranslation.width * inertia + value.translation.width * (1 - inertia)) * sensitivity,
+                        height: settledCameraOffset.height + (value.predictedEndTranslation.height * inertia + value.translation.height * (1 - inertia)) * sensitivity
                     )
                     settledCameraOffset = cameraOffset
                 }
-                feedbackPulse += 1
+                AnviHaptics.selection(enabled: preferences.hapticsEnabled)
             }
     }
 
     private var zoomGesture: some Gesture {
         MagnifyGesture()
             .onChanged { value in
-                zoom = min(max(settledZoom * value.magnification, minimumZoom), maximumZoom)
+                let adjustedMagnification = 1 + (value.magnification - 1) * preferences.zoomSensitivity
+                zoom = min(
+                    max(settledZoom * adjustedMagnification, AnviCustomization.Developer.minimumZoom),
+                    AnviCustomization.Developer.maximumZoom
+                )
             }
             .onEnded { _ in
                 settledZoom = zoom
-                feedbackPulse += 1
+                AnviHaptics.selection(enabled: preferences.hapticsEnabled)
             }
     }
 
+    private var canvasGesture: some Gesture {
+        panGesture.simultaneously(with: zoomGesture)
+    }
+
     private func resetView() {
-        feedbackPulse += 1
-        withAnimation(.spring(response: 0.55, dampingFraction: 0.78)) {
+        AnviHaptics.selection(enabled: preferences.hapticsEnabled)
+        withAnimation(canvasSpring) {
             cameraOffset = .zero
             settledCameraOffset = .zero
-            zoom = 0.88
-            settledZoom = 0.88
+            zoom = AnviCustomization.Developer.defaultZoom
+            settledZoom = AnviCustomization.Developer.defaultZoom
         }
+    }
+
+    private var canvasSpring: Animation {
+        .spring(
+            response: AnviCustomization.Developer.canvasSpringResponse,
+            dampingFraction: max(0.5, 1 - preferences.bounciness * 0.46)
+        )
     }
 
     private var greeting: String {
@@ -215,7 +260,10 @@ private struct DotField: View {
 
     var body: some View {
         Canvas { context, size in
-            let spacing = max(23, 34 * zoom)
+            let spacing = max(
+                AnviCustomization.Developer.minimumDotSpacing,
+                AnviCustomization.Developer.dotSpacing * zoom
+            )
             let radius = max(0.7, 1.15 * zoom)
             let startX = offset.width.truncatingRemainder(dividingBy: spacing)
             let startY = offset.height.truncatingRemainder(dividingBy: spacing)
@@ -231,8 +279,10 @@ private struct DotField: View {
     }
 }
 
-private struct MovableIsland<Content: View>: View {
+private struct MovableFloatingCard<Content: View>: View {
     let scale: CGFloat
+    let hapticsEnabled: Bool
+    let bounciness: Double
     let onMove: (CGSize) -> Void
     @ViewBuilder let content: Content
 
@@ -242,19 +292,28 @@ private struct MovableIsland<Content: View>: View {
     var body: some View {
         content
             .scaleEffect(scale)
+            .scaleEffect(isDragging ? AnviCustomization.Developer.cardLiftScale : 1)
             .offset(translation)
             .highPriorityGesture(
-                DragGesture(minimumDistance: 6, coordinateSpace: .global)
+                DragGesture(
+                    minimumDistance: AnviCustomization.Developer.cardDragMinimumDistance,
+                    coordinateSpace: .global
+                )
                     .onChanged { value in
                         if !isDragging {
                             isDragging = true
-                            UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.65)
+                            AnviHaptics.softImpact(enabled: hapticsEnabled)
                         }
                         translation = value.translation
                     }
                     .onEnded { value in
                         onMove(CGSize(width: value.translation.width / scale, height: value.translation.height / scale))
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.72)) {
+                        withAnimation(
+                            .spring(
+                                response: AnviCustomization.Developer.cardSpringResponse,
+                                dampingFraction: max(0.5, 1 - bounciness * 0.5)
+                            )
+                        ) {
                             translation = .zero
                         }
                         isDragging = false
@@ -295,13 +354,11 @@ private struct HomeOrb: View {
     }
 }
 
-private struct WordIsland: View {
-    private var word: DailyWord { DailyWord.today }
-
+private struct ThatsWordFloatingCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("TODAY'S WORD", systemImage: "sun.max.fill")
+                Label("WORD ISLAND", systemImage: "character.book.closed.fill")
                     .font(.system(size: 10, weight: .bold, design: .rounded))
                     .foregroundStyle(AnviTheme.clay)
                 Spacer()
@@ -309,10 +366,10 @@ private struct WordIsland: View {
                     .font(.caption.bold())
                     .foregroundStyle(AnviTheme.mutedInk.opacity(0.6))
             }
-            Text(word.word)
+            Text("That’s Word")
                 .font(.system(size: 28, weight: .bold, design: .serif))
                 .foregroundStyle(AnviTheme.ink)
-            Text(word.shortDefinition)
+            Text("Turn the words over.")
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundStyle(AnviTheme.mutedInk)
                 .lineLimit(2)
@@ -323,7 +380,7 @@ private struct WordIsland: View {
     }
 }
 
-private struct ThoughtsIsland: View {
+private struct ThoughtsFloatingCard: View {
     let thoughts: [Thought]
 
     var body: some View {
@@ -350,7 +407,7 @@ private struct ThoughtsIsland: View {
     }
 }
 
-private struct BreathingIsland: View {
+private struct BreathingFloatingCard: View {
     @State private var expanding = false
 
     var body: some View {

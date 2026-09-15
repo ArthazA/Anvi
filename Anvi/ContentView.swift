@@ -2,9 +2,10 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var store = CanvasStore()
+    @StateObject private var preferences = AnviPreferences()
 
     var body: some View {
-        AnviCanvasView(store: store)
+        AnviCanvasView(store: store, preferences: preferences)
             .preferredColorScheme(.light)
     }
 }

@@ -1,54 +1,4 @@
 import SwiftUI
-import UIKit
-
-struct DailyWord {
-    let word: String
-    let pronunciation: String
-    let shortDefinition: String
-    let reflection: String
-
-    static var today: DailyWord {
-        let words = [
-            DailyWord(word: "apricity", pronunciation: "uh-PRIS-uh-tee", shortDefinition: "the warmth of sun in winter", reflection: "Notice the small warmth that finds you today."),
-            DailyWord(word: "petrichor", pronunciation: "PET-ri-kor", shortDefinition: "the scent after rain", reflection: "What feels newly washed clean?"),
-            DailyWord(word: "susurrus", pronunciation: "soo-SUR-us", shortDefinition: "a whispering or rustling sound", reflection: "Listen for the quietest sound around you."),
-            DailyWord(word: "liminal", pronunciation: "LIM-uh-nuhl", shortDefinition: "occupying a space between things", reflection: "Let an unfinished moment remain open."),
-            DailyWord(word: "verdant", pronunciation: "VUR-dnt", shortDefinition: "green with growing plants", reflection: "Find one living thing and really look at it."),
-            DailyWord(word: "solace", pronunciation: "SOL-is", shortDefinition: "comfort found in difficulty", reflection: "Name the place where you soften."),
-            DailyWord(word: "mellifluous", pronunciation: "muh-LIF-loo-us", shortDefinition: "pleasantly smooth and musical", reflection: "Choose one sentence worth saying slowly.")
-        ]
-        let day = Calendar.current.ordinality(of: .day, in: .year, for: .now) ?? 0
-        return words[day % words.count]
-    }
-}
-
-struct WordDetail: View {
-    private let word = DailyWord.today
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Capsule().fill(AnviTheme.clay).frame(width: 42, height: 6)
-            Text(word.word)
-                .font(.system(size: 40, weight: .bold, design: .serif))
-                .foregroundStyle(AnviTheme.ink)
-            Text(word.pronunciation.uppercased())
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-                .tracking(1.5)
-                .foregroundStyle(AnviTheme.clay)
-            Text(word.shortDefinition)
-                .font(.system(size: 20, weight: .medium, design: .rounded))
-                .foregroundStyle(AnviTheme.ink)
-            Divider()
-            Text(word.reflection)
-                .font(.system(size: 16, weight: .medium, design: .serif))
-                .italic()
-                .foregroundStyle(AnviTheme.mutedInk)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(28)
-        .background(AnviTheme.paper)
-    }
-}
 
 struct ThoughtsDetail: View {
     let thoughts: [Thought]
@@ -100,6 +50,7 @@ struct ThoughtsDetail: View {
 }
 
 struct ThoughtComposer: View {
+    let hapticsEnabled: Bool
     let onSave: (String) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
@@ -118,7 +69,7 @@ struct ThoughtComposer: View {
 
             Button {
                 onSave(text)
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                AnviHaptics.success(enabled: hapticsEnabled)
                 dismiss()
             } label: {
                 Text("Keep it")
