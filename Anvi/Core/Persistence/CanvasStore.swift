@@ -1,33 +1,5 @@
-import CoreGraphics
 import Combine
 import Foundation
-
-struct CanvasPoint: Codable, Equatable {
-    var x: CGFloat
-    var y: CGFloat
-
-    var cgPoint: CGPoint { CGPoint(x: x, y: y) }
-}
-
-enum FloatingCardKind: String, Codable, CaseIterable, Identifiable {
-    case thatsWord = "word"
-    case thoughts
-    case breathing
-
-    var id: String { rawValue }
-}
-
-struct FloatingCardPlacement: Identifiable, Codable, Equatable {
-    var id: FloatingCardKind { kind }
-    let kind: FloatingCardKind
-    var position: CanvasPoint
-}
-
-struct Thought: Identifiable, Codable, Equatable {
-    let id: UUID
-    let text: String
-    let createdAt: Date
-}
 
 @MainActor
 final class CanvasStore: ObservableObject {
@@ -41,10 +13,12 @@ final class CanvasStore: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        cards = Self.decode([FloatingCardPlacement].self, from: defaults.data(forKey: cardsKey))
+        let savedCards = Self.decode([FloatingCardPlacement].self, from: defaults.data(forKey: cardsKey))
             ?? Self.decode([FloatingCardPlacement].self, from: defaults.data(forKey: legacyCardsKey))
-            ?? Self.defaultCards
+            ?? []
+        cards = Self.mergingMissingCards(into: savedCards)
         thoughts = Self.decode([Thought].self, from: defaults.data(forKey: thoughtsKey)) ?? []
+        persist(cards, key: cardsKey)
     }
 
     func move(_ kind: FloatingCardKind, by delta: CGSize) {
@@ -71,9 +45,18 @@ final class CanvasStore: ObservableObject {
         return try? JSONDecoder().decode(type, from: data)
     }
 
+    private static func mergingMissingCards(into saved: [FloatingCardPlacement]) -> [FloatingCardPlacement] {
+        var result = saved
+        for fallback in defaultCards where !result.contains(where: { $0.kind == fallback.kind }) {
+            result.append(fallback)
+        }
+        return result
+    }
+
     private static let defaultCards = [
         FloatingCardPlacement(kind: .thatsWord, position: CanvasPoint(x: -118, y: -176)),
         FloatingCardPlacement(kind: .thoughts, position: CanvasPoint(x: 115, y: 106)),
-        FloatingCardPlacement(kind: .breathing, position: CanvasPoint(x: -135, y: 226))
+        FloatingCardPlacement(kind: .breathing, position: CanvasPoint(x: -135, y: 226)),
+        FloatingCardPlacement(kind: .leVaulter, position: CanvasPoint(x: 155, y: 300))
     ]
 }

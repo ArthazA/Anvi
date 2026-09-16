@@ -111,7 +111,6 @@ struct BreathingDetail: View {
             }
             Text(expanded ? "Breathe out" : "Breathe in")
                 .font(.system(size: 26, weight: .bold, design: .rounded))
-                .contentTransition(.numericText())
             Text("Follow the shape. Nothing else to do.")
                 .font(.system(size: 14, weight: .medium, design: .rounded))
                 .foregroundStyle(AnviTheme.mutedInk)
