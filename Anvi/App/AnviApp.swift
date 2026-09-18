@@ -1,10 +1,4 @@
-//
-//  AnviApp.swift
-//  Anvi
-//
-//  Created by Arthaz's MacBook on 11/09/26.
-//
-
+import SwiftData
 import SwiftUI
 
 @main
@@ -13,5 +7,6 @@ struct AnviApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(for: [WordEntry.self, WordCategory.self])
     }
 }
